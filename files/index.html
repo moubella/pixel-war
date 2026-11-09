@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pixel War</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #DCE3E8;
+    --surface: #F6F8FA;
+    --ink: #1B2430;
+    --muted: #566473;
+    --line: #C3CDD5;
+    --shadow: rgba(27, 36, 48, .18);
+    --focus: #2F6FEB;
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11171E;
+      --surface: #1B232D;
+      --ink: #E6ECF1;
+      --muted: #94A2AF;
+      --line: #2C3743;
+      --shadow: rgba(0, 0, 0, .55);
+      --focus: #7AA7FF;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11171E;
+    --surface: #1B232D;
+    --ink: #E6ECF1;
+    --muted: #94A2AF;
+    --line: #2C3743;
+    --shadow: rgba(0, 0, 0, .55);
+    --focus: #7AA7FF;
+    color-scheme: dark;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { height: 100%; background: var(--bg); scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.45 "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  header {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 14px 18px 8px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  h1 {
+    margin: 0;
+    font-family: "Pixelify Sans", ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 700;
+    font-size: 1.7rem;
+    line-height: 1.1;
+  }
+  #status {
+    font-family: "Pixelify Sans", ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 500;
+    font-size: 1.05rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  #status[data-ready="true"] { color: var(--ink); }
+  #msg:empty { display: none; }
+
+  #scroller {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  #inner {
+    display: flex;
+    min-width: 100%;
+    min-height: 100%;
+    width: max-content;
+    height: max-content;
+    padding: 8px;
+  }
+  #stage {
+    position: relative;
+    margin: auto;
+    box-shadow: 0 0 0 1px var(--line), 0 8px 28px var(--shadow);
+  }
+  #board {
+    display: block;
+    background: #FFFFFF;
+    cursor: crosshair;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+    touch-action: manipulation;
+  }
+  #sel {
+    position: absolute;
+    display: none;
+    pointer-events: none;
+    box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--surface);
+  }
+
+  .panel {
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    padding: 12px 18px 14px;
+  }
+  .panel-inner {
+    max-width: 560px;
+    margin: 0 auto;
+    display: grid;
+    gap: 12px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  #coords { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .zoom { display: flex; gap: 6px; }
+  .zoom button {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    font: 700 1.25rem/1 "Pixelify Sans", ui-monospace, monospace;
+    cursor: pointer;
+  }
+  .zoom button:disabled { opacity: .4; cursor: default; }
+
+  #palette {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+  }
+  .sw {
+    height: 38px;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, .2);
+    cursor: pointer;
+  }
+  .sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+
+  #msg {
+    min-height: 1.3em;
+    margin: -4px 0 0;
+    font-size: .9rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  button:focus-visible, #board:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Pixel War</h1>
+    <div id="status" role="status" aria-live="polite">Connecting…</div>
+  </header>
+
+  <div id="scroller">
+    <div id="inner">
+      <div id="stage">
+        <canvas id="board" tabindex="0" aria-label="Shared canvas, 64 by 64 pixels. Click a pixel to paint it, or use the arrow keys and Enter."></canvas>
+        <div id="sel" aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-inner">
+      <div class="row">
+        <span id="coords">Pick a color, then click to paint</span>
+        <div class="zoom">
+          <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+          <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+      <div id="palette" role="group" aria-label="Colors"></div>
+      <p id="msg" aria-live="polite"></p>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const N = 64;            // must match the api files
+  const BATCH = 100;       // pixels per round, must match api/place.js
+  const POLL_MS = 1500;
+  const ZOOMS = [1, 2, 3, 4, 6];
+  const COLORS = [
+    "#FFFFFF", "#E4E4E4", "#888888", "#222222", "#FFA7D1", "#E50000", "#E59500", "#A06A42",
+    "#E5D900", "#94E044", "#02BE01", "#00D3DD", "#0083C7", "#0000EA", "#CF6EE4", "#820080"
+  ];
+  const NAMES = [
+    "White", "Light grey", "Grey", "Black", "Pink", "Red", "Orange", "Brown",
+    "Yellow", "Lime", "Green", "Cyan", "Blue", "Navy", "Lilac", "Purple"
+  ];
+  const RGB = COLORS.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)));
+
+  const $ = (id) => document.getElementById(id);
+  const scroller = $("scroller"), inner = $("inner"), canvas = $("board"), selEl = $("sel");
+  const statusEl = $("status"), coordsEl = $("coords"), msgEl = $("msg");
+  const zoomInBtn = $("zoomIn"), zoomOutBtn = $("zoomOut"), paletteEl = $("palette");
+
+  canvas.width = N; canvas.height = N;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(N, N);
+  const pixels = new Uint8Array(N * N);   // last canvas from the server
+  const pending = new Map();              // idx -> { c, until } for pixels you just placed
+
+  let zi = 0, cell = 6, cursor = null, color = 5;
+  let online = false, everLoaded = false;
+  let left = BATCH, cooldownUntil = 0;
+
+  // A random id per browser, used to count your pixels
+  let playerId;
+  try {
+    playerId = localStorage.getItem("pw-id");
+    if (!playerId) { playerId = crypto.randomUUID(); localStorage.setItem("pw-id", playerId); }
+  } catch (_) {
+    playerId = crypto.randomUUID();
+  }
+
+  // ---------- drawing ----------
+  function shown(i) {
+    const p = pending.get(i);
+    return p ? p.c : pixels[i];
+  }
+  function draw() {
+    const now = Date.now();
+    for (let i = 0; i < N * N; i++) {
+      const p = pending.get(i);
+      if (p && (now > p.until || p.c === pixels[i])) pending.delete(i);
+      const [r, g, b] = RGB[shown(i)];
+      const o = i * 4;
+      img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  function applyCanvas(str) {
+    for (let i = 0; i < N * N; i++) {
+      const c = parseInt(str[i], 16);
+      pixels[i] = c >= 0 && c < COLORS.length ? c : 0;
+    }
+    draw();
+  }
+
+  // ---------- layout & cursor ----------
+  function layout() {
+    const avail = Math.min(scroller.clientWidth, scroller.clientHeight) - 16;
+    cell = Math.max(3, Math.floor(avail / N));
+    const size = cell * ZOOMS[zi] * N;
+    canvas.style.width = size + "px";
+    canvas.style.height = size + "px";
+    zoomOutBtn.disabled = zi === 0;
+    zoomInBtn.disabled = zi === ZOOMS.length - 1;
+    drawCursor();
+  }
+  function drawCursor() {
+    if (!cursor) { selEl.style.display = "none"; return; }
+    const s = cell * ZOOMS[zi];
+    selEl.style.display = "block";
+    selEl.style.left = cursor.x * s + "px";
+    selEl.style.top = cursor.y * s + "px";
+    selEl.style.width = s + "px";
+    selEl.style.height = s + "px";
+    selEl.style.background = COLORS[color];
+  }
+  function moveCursor(x, y) {
+    cursor = { x: Math.max(0, Math.min(N - 1, x)), y: Math.max(0, Math.min(N - 1, y)) };
+    coordsEl.textContent = `Pixel ${cursor.x}, ${cursor.y}`;
+    drawCursor();
+  }
+  function cellAt(e) {
+    const r = canvas.getBoundingClientRect();
+    return [Math.floor((e.clientX - r.left) / r.width * N), Math.floor((e.clientY - r.top) / r.height * N)];
+  }
+  function setZoom(next) {
+    if (next < 0 || next >= ZOOMS.length || next === zi) return;
+    const rx = (scroller.scrollLeft + scroller.clientWidth / 2) / inner.scrollWidth;
+    const ry = (scroller.scrollTop + scroller.clientHeight / 2) / inner.scrollHeight;
+    zi = next;
+    layout();
+    scroller.scrollLeft = rx * inner.scrollWidth - scroller.clientWidth / 2;
+    scroller.scrollTop = ry * inner.scrollHeight - scroller.clientHeight / 2;
+  }
+
+  // ---------- palette ----------
+  COLORS.forEach((hex, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sw";
+    b.style.background = hex;
+    b.setAttribute("aria-label", NAMES[i]);
+    b.setAttribute("aria-pressed", String(i === color));
+    b.addEventListener("click", () => {
+      color = i;
+      paletteEl.querySelectorAll(".sw").forEach((el, j) => el.setAttribute("aria-pressed", String(j === i)));
+      drawCursor();
+    });
+    paletteEl.appendChild(b);
+  });
+
+  // ---------- status ----------
+  let lastStatus = "";
+  function update() {
+    if (cooldownUntil && Date.now() >= cooldownUntil) {
+      cooldownUntil = 0;
+      left = BATCH;
+      say("");
+    }
+    const wait = Math.max(0, cooldownUntil - Date.now());
+    let status, ready = false;
+    if (!everLoaded) status = "Connecting…";
+    else if (!online) status = "Offline";
+    else if (wait > 0) status = `Wait ${Math.ceil(wait / 1000)}s`;
+    else { status = `${left} ${left === 1 ? "pixel" : "pixels"} left`; ready = true; }
+    if (status !== lastStatus) {
+      statusEl.textContent = status;
+      statusEl.dataset.ready = String(ready);
+      lastStatus = status;
+    }
+  }
+  function say(text) { msgEl.textContent = text; }
+  function startWait(ms) {
+    left = 0;
+    cooldownUntil = Date.now() + ms;
+    say("Round done. A new round of 100 pixels starts when the timer ends.");
+    update();
+  }
+
+  // ---------- server ----------
+  async function poll() {
+    if (document.hidden) return;
+    try {
+      const r = await fetch("/api/canvas", { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      if (typeof j.canvas !== "string") throw new Error("bad data");
+      applyCanvas(j.canvas);
+      if (!online && everLoaded) say("");
+      online = true; everLoaded = true;
+    } catch (_) {
+      if (online || !everLoaded) say("Can’t reach the canvas. Retrying…");
+      online = false; everLoaded = true;
+    }
+    update();
+  }
+
+  async function loadMyStatus() {
+    try {
+      const r = await fetch(`/api/place?id=${encodeURIComponent(playerId)}`, { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.wait > 0) startWait(j.wait);
+      else if (Number.isInteger(j.left)) left = j.left;
+      update();
+    } catch (_) {}
+  }
+
+  async function paint(x, y) {
+    moveCursor(x, y);
+    if (!online) return;
+    if (cooldownUntil > Date.now() || left <= 0) return;
+    const idx = y * N + x, c = color;
+    if (shown(idx) === c) return; // already that color, don't spend a pixel
+
+    left--;
+    pending.set(idx, { c, until: Date.now() + 6000 });
+    draw(); update();
+
+    try {
+      const r = await fetch("/api/place", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x, y, c, id: playerId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) {
+        if (j.wait > 0) startWait(j.wait);
+        else if (Number.isInteger(j.left)) left = Math.min(left, j.left);
+      } else {
+        pending.delete(idx);
+        if (r.status === 429) startWait(j.wait || 1000);
+        else { left++; say("That pixel didn’t save. Paint it again."); }
+      }
+    } catch (_) {
+      pending.delete(idx);
+      left++;
+      say("That pixel didn’t save. Check your connection and paint it again.");
+    }
+    draw(); update();
+  }
+
+  // ---------- events ----------
+  canvas.addEventListener("click", (e) => { const [x, y] = cellAt(e); paint(x, y); });
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const [x, y] = cellAt(e);
+    if (!cursor || cursor.x !== x || cursor.y !== y) moveCursor(x, y);
+  });
+  canvas.addEventListener("pointerleave", (e) => {
+    if (e.pointerType === "mouse") { cursor = null; drawCursor(); }
+  });
+  canvas.addEventListener("keydown", (e) => {
+    const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (moves[e.key]) {
+      e.preventDefault();
+      if (!cursor) moveCursor(N / 2, N / 2);
+      else moveCursor(cursor.x + moves[e.key][0], cursor.y + moves[e.key][1]);
+      selEl.scrollIntoView({ block: "nearest", inline: "nearest" });
+    } else if ((e.key === "Enter" || e.key === " ") && cursor) {
+      e.preventDefault();
+      paint(cursor.x, cursor.y);
+    }
+  });
+  zoomInBtn.addEventListener("click", () => setZoom(zi + 1));
+  zoomOutBtn.addEventListener("click", () => setZoom(zi - 1));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+  new ResizeObserver(layout).observe(scroller);
+
+  draw();
+  layout();
+  update();
+  poll();
+  loadMyStatus();
+  setInterval(poll, POLL_MS);
+  setInterval(update, 250);
+})();
+</script>
+</body>
+</html>
