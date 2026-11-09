@@ -1,6 +1,7 @@
 import { Redis } from "@upstash/redis";
 
 const N = 64; // must match index.html and place.js
+const PASSWORD = process.env.PIXEL_PASSWORD || "haha";
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL,
@@ -8,8 +9,12 @@ const redis = new Redis({
   automaticDeserialization: false,
 });
 
-// GET /api/canvas -> { n, canvas } where canvas is N*N hex chars (one color index per pixel)
+// GET /api/canvas?pw=... -> { n, canvas } where canvas is N*N hex chars (one color index per pixel)
 export default async function handler(req, res) {
+  if (req.query.pw !== PASSWORD) {
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(401).json({ error: "Wrong password" });
+  }
   try {
     let canvas = await redis.get("canvas");
     if (!canvas) {

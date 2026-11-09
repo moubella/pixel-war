@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Pixel War</title>
+<title>PIXEL WAR M3A L3CHRAN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
@@ -16,6 +16,7 @@
     --line: #C3CDD5;
     --shadow: rgba(27, 36, 48, .18);
     --focus: #2F6FEB;
+    --danger: #C62828;
     color-scheme: light;
     box-sizing: border-box;
     padding-top: env(safe-area-inset-top, 0px);
@@ -30,6 +31,7 @@
       --line: #2C3743;
       --shadow: rgba(0, 0, 0, .55);
       --focus: #7AA7FF;
+      --danger: #FF8A80;
       color-scheme: dark;
     }
   }
@@ -41,6 +43,7 @@
     --line: #2C3743;
     --shadow: rgba(0, 0, 0, .55);
     --focus: #7AA7FF;
+    --danger: #FF8A80;
     color-scheme: dark;
   }
   *, *::before, *::after { box-sizing: border-box; }
@@ -72,8 +75,9 @@
     margin: 0;
     font-family: "Pixelify Sans", ui-monospace, "SF Mono", Menlo, monospace;
     font-weight: 700;
-    font-size: 1.7rem;
+    font-size: clamp(1.1rem, 4.6vw, 1.7rem);
     line-height: 1.1;
+    text-wrap: balance;
   }
   #status {
     font-family: "Pixelify Sans", ui-monospace, "SF Mono", Menlo, monospace;
@@ -173,6 +177,55 @@
     text-align: center;
   }
 
+  #gate {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 24px calc(24px + env(safe-area-inset-bottom, 0px));
+    background: rgba(10, 14, 19, .55);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  #gate[hidden] { display: none; }
+  .gate-card {
+    width: min(100%, 360px);
+    display: grid;
+    gap: 12px;
+    padding: 22px;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px var(--shadow);
+  }
+  .gate-card h2 {
+    margin: 0;
+    font: 700 1.5rem/1.1 "Pixelify Sans", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .gate-card input {
+    height: 46px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    font: inherit;
+  }
+  .gate-card button {
+    height: 46px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--ink);
+    color: var(--surface);
+    font: 700 1.1rem/1 "Pixelify Sans", ui-monospace, "SF Mono", Menlo, monospace;
+    cursor: pointer;
+  }
+  .gate-card button:disabled { opacity: .6; cursor: default; }
+  #gateErr { min-height: 1.3em; margin: 0; font-size: .9rem; color: var(--danger); }
+  input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+
   button:focus-visible, #board:focus-visible {
     outline: 3px solid var(--focus);
     outline-offset: 2px;
@@ -181,7 +234,7 @@
 </head>
 <body>
   <header>
-    <h1>Pixel War</h1>
+    <h1>PIXEL WAR M3A L3CHRAN</h1>
     <div id="status" role="status" aria-live="polite">Connecting…</div>
   </header>
 
@@ -206,6 +259,15 @@
       <div id="palette" role="group" aria-label="Colors"></div>
       <p id="msg" aria-live="polite"></p>
     </div>
+  </div>
+
+  <div id="gate" hidden>
+    <form class="gate-card" id="gateForm" autocomplete="on">
+      <h2 id="gateTitle">Enter the password</h2>
+      <input id="gateInput" type="password" name="password" autocomplete="current-password" aria-labelledby="gateTitle" required>
+      <button id="gateBtn" type="submit">Join</button>
+      <p id="gateErr" aria-live="polite"></p>
+    </form>
   </div>
 
 <script>
@@ -238,6 +300,21 @@
   let zi = 0, cell = 6, cursor = null, color = 5;
   let online = false, everLoaded = false;
   let left = BATCH, cooldownUntil = 0;
+
+  // Password: asked once, then remembered in this browser
+  const gate = $("gate"), gateForm = $("gateForm"), gateInput = $("gateInput"), gateBtn = $("gateBtn"), gateErr = $("gateErr");
+  let pw = null;
+  try { pw = localStorage.getItem("pw-pass"); } catch (_) {}
+  const pwQuery = () => "pw=" + encodeURIComponent(pw || "");
+  function showGate(error) {
+    pw = null;
+    try { localStorage.removeItem("pw-pass"); } catch (_) {}
+    gateErr.textContent = error || "";
+    gate.hidden = false;
+    gateInput.value = "";
+    gateInput.focus();
+    update();
+  }
 
   // A random id per browser, used to count your pixels
   let playerId;
@@ -338,7 +415,8 @@
     }
     const wait = Math.max(0, cooldownUntil - Date.now());
     let status, ready = false;
-    if (!everLoaded) status = "Connecting…";
+    if (!pw) status = "Locked";
+    else if (!everLoaded) status = "Connecting…";
     else if (!online) status = "Offline";
     else if (wait > 0) status = `Wait ${Math.ceil(wait / 1000)}s`;
     else { status = `${left} ${left === 1 ? "pixel" : "pixels"} left`; ready = true; }
@@ -358,9 +436,10 @@
 
   // ---------- server ----------
   async function poll() {
-    if (document.hidden) return;
+    if (document.hidden || !pw) return;
     try {
-      const r = await fetch("/api/canvas", { cache: "no-store" });
+      const r = await fetch(`/api/canvas?${pwQuery()}`, { cache: "no-store" });
+      if (r.status === 401) { showGate("The password changed. Enter the new one."); return; }
       if (!r.ok) throw new Error(r.status);
       const j = await r.json();
       if (typeof j.canvas !== "string") throw new Error("bad data");
@@ -376,7 +455,7 @@
 
   async function loadMyStatus() {
     try {
-      const r = await fetch(`/api/place?id=${encodeURIComponent(playerId)}`, { cache: "no-store" });
+      const r = await fetch(`/api/place?id=${encodeURIComponent(playerId)}&${pwQuery()}`, { cache: "no-store" });
       if (!r.ok) return;
       const j = await r.json();
       if (j.wait > 0) startWait(j.wait);
@@ -387,7 +466,7 @@
 
   async function paint(x, y) {
     moveCursor(x, y);
-    if (!online) return;
+    if (!online || !pw) return;
     if (cooldownUntil > Date.now() || left <= 0) return;
     const idx = y * N + x, c = color;
     if (shown(idx) === c) return; // already that color, don't spend a pixel
@@ -400,7 +479,7 @@
       const r = await fetch("/api/place", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ x, y, c, id: playerId }),
+        body: JSON.stringify({ x, y, c, id: playerId, pw }),
       });
       const j = await r.json().catch(() => ({}));
       if (r.ok) {
@@ -408,7 +487,8 @@
         else if (Number.isInteger(j.left)) left = Math.min(left, j.left);
       } else {
         pending.delete(idx);
-        if (r.status === 429) startWait(j.wait || 1000);
+        if (r.status === 401) { left++; showGate("The password changed. Enter the new one."); }
+        else if (r.status === 429) startWait(j.wait || 1000);
         else { left++; say("That pixel didn’t save. Paint it again."); }
       }
     } catch (_) {
@@ -446,11 +526,37 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
   new ResizeObserver(layout).observe(scroller);
 
+  gateForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const value = gateInput.value;
+    if (!value) return;
+    gateBtn.disabled = true;
+    gateErr.textContent = "";
+    try {
+      const r = await fetch(`/api/canvas?pw=${encodeURIComponent(value)}`, { cache: "no-store" });
+      if (r.status === 401) { gateErr.textContent = "Wrong password. Try again."; gateInput.select(); return; }
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      pw = value;
+      try { localStorage.setItem("pw-pass", pw); } catch (_) {}
+      gate.hidden = true;
+      applyCanvas(j.canvas);
+      online = true; everLoaded = true;
+      loadMyStatus();
+      update();
+      canvas.focus({ preventScroll: true });
+    } catch (_) {
+      gateErr.textContent = "Can’t reach the server. Try again.";
+    } finally {
+      gateBtn.disabled = false;
+    }
+  });
+
   draw();
   layout();
   update();
-  poll();
-  loadMyStatus();
+  if (pw) { poll(); loadMyStatus(); }
+  else showGate();
   setInterval(poll, POLL_MS);
   setInterval(update, 250);
 })();
