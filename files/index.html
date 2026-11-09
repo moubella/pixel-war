@@ -241,7 +241,7 @@
   <div id="scroller">
     <div id="inner">
       <div id="stage">
-        <canvas id="board" tabindex="0" aria-label="Shared canvas, 64 by 64 pixels. Click a pixel to paint it, or use the arrow keys and Enter."></canvas>
+        <canvas id="board" tabindex="0" aria-label="Shared canvas, 180 by 180 pixels. Click a pixel to paint it, or use the arrow keys and Enter."></canvas>
         <div id="sel" aria-hidden="true"></div>
       </div>
     </div>
@@ -272,10 +272,10 @@
 
 <script>
 (() => {
-  const N = 64;            // must match the api files
-  const BATCH = 100;       // pixels per round, must match api/place.js
+  let N = 180;             // board size; the server's size wins if different
+  const BATCH = 1000;      // pixels per round, must match api/place.js
   const POLL_MS = 1500;
-  const ZOOMS = [1, 2, 3, 4, 6];
+  const ZOOMS = [1, 2, 3, 4, 6, 8, 12];
   const COLORS = [
     "#FFFFFF", "#E4E4E4", "#888888", "#222222", "#FFA7D1", "#E50000", "#E59500", "#A06A42",
     "#E5D900", "#94E044", "#02BE01", "#00D3DD", "#0083C7", "#0000EA", "#CF6EE4", "#820080"
@@ -293,8 +293,8 @@
 
   canvas.width = N; canvas.height = N;
   const ctx = canvas.getContext("2d");
-  const img = ctx.createImageData(N, N);
-  const pixels = new Uint8Array(N * N);   // last canvas from the server
+  let img = ctx.createImageData(N, N);
+  let pixels = new Uint8Array(N * N);     // last canvas from the server
   const pending = new Map();              // idx -> { c, until } for pixels you just placed
 
   let zi = 0, cell = 6, cursor = null, color = 5;
@@ -341,7 +341,18 @@
     }
     ctx.putImageData(img, 0, 0);
   }
-  function applyCanvas(str) {
+  function resizeBoard(n) {
+    N = n;
+    canvas.width = N; canvas.height = N;
+    img = ctx.createImageData(N, N);
+    pixels = new Uint8Array(N * N);
+    pending.clear();
+    cursor = null;
+    canvas.setAttribute("aria-label", `Shared canvas, ${N} by ${N} pixels. Click a pixel to paint it, or use the arrow keys and Enter.`);
+    layout();
+  }
+  function applyCanvas(str, n) {
+    if (Number.isInteger(n) && n > 0 && n <= 512 && n !== N) resizeBoard(n);
     for (let i = 0; i < N * N; i++) {
       const c = parseInt(str[i], 16);
       pixels[i] = c >= 0 && c < COLORS.length ? c : 0;
@@ -352,8 +363,8 @@
   // ---------- layout & cursor ----------
   function layout() {
     const avail = Math.min(scroller.clientWidth, scroller.clientHeight) - 16;
-    cell = Math.max(3, Math.floor(avail / N));
-    const size = cell * ZOOMS[zi] * N;
+    cell = Math.max(1, avail / N); // fit the whole board on screen at zoom 1
+    const size = Math.round(cell * ZOOMS[zi] * N);
     canvas.style.width = size + "px";
     canvas.style.height = size + "px";
     zoomOutBtn.disabled = zi === 0;
@@ -362,7 +373,7 @@
   }
   function drawCursor() {
     if (!cursor) { selEl.style.display = "none"; return; }
-    const s = cell * ZOOMS[zi];
+    const s = Math.round(cell * ZOOMS[zi] * N) / N;
     selEl.style.display = "block";
     selEl.style.left = cursor.x * s + "px";
     selEl.style.top = cursor.y * s + "px";
@@ -430,7 +441,7 @@
   function startWait(ms) {
     left = 0;
     cooldownUntil = Date.now() + ms;
-    say("Round done. A new round of 100 pixels starts when the timer ends.");
+    say(`Round done. A new round of ${BATCH} pixels starts when the timer ends.`);
     update();
   }
 
@@ -443,7 +454,7 @@
       if (!r.ok) throw new Error(r.status);
       const j = await r.json();
       if (typeof j.canvas !== "string") throw new Error("bad data");
-      applyCanvas(j.canvas);
+      applyCanvas(j.canvas, j.n);
       if (!online && everLoaded) say("");
       online = true; everLoaded = true;
     } catch (_) {
@@ -540,7 +551,7 @@
       pw = value;
       try { localStorage.setItem("pw-pass", pw); } catch (_) {}
       gate.hidden = true;
-      applyCanvas(j.canvas);
+      applyCanvas(j.canvas, j.n);
       online = true; everLoaded = true;
       loadMyStatus();
       update();

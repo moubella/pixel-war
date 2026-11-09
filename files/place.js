@@ -1,8 +1,9 @@
 import { Redis } from "@upstash/redis";
 
-const N = 64;          // canvas size, must match index.html and canvas.js
+const N = 180;         // board size, must match canvas.js
+const KEY = `canvas${N}`;
 const COLORS = 16;     // palette size
-const BATCH = 100;     // pixels per round
+const BATCH = 1000;    // pixels per round
 const COOLDOWN_S = 60; // seconds to wait after each round
 const PASSWORD = process.env.PIXEL_PASSWORD || "haha";
 
@@ -53,8 +54,8 @@ export default async function handler(req, res) {
     const used = Number(await redis.incr(`n:${id}`));
     if (used > BATCH) return res.status(429).json({ left: 0, wait: await startCooldown(id) });
 
-    await redis.set("canvas", "0".repeat(N * N), { nx: true });
-    await redis.setrange("canvas", y * N + x, c.toString(16)); // atomic, one char per pixel
+    await redis.set(KEY, "0".repeat(N * N), { nx: true });
+    await redis.setrange(KEY, y * N + x, c.toString(16)); // atomic, one char per pixel
 
     if (used === BATCH) return res.status(200).json({ ok: true, left: 0, wait: await startCooldown(id) });
     return res.status(200).json({ ok: true, left: BATCH - used, wait: 0 });
